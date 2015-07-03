@@ -1,3 +1,5 @@
+require 'fileutils'
+
 Puppet::Type.type(:virsh).provide(:vhost) do
 	commands :vshow 	=> '/usr/bin/virsh'
 	commands :qemu_img 	=> '/usr/bin/qemu-img'
@@ -6,9 +8,9 @@ Puppet::Type.type(:virsh).provide(:vhost) do
 	def self.instances
 		vms = vshow('-q','list','--all')
 		vms.split(/\n/)[0..-1].map do |vm|
-			line = vm.strip.split(/\s+/)	
-			name 	= line[1]	
-			status	= line[2] 
+			line = vm.strip.split(/\s+/)
+			name 	= line[1]
+			status	= line[2]
 
 			blks = vshow('domblklist', name)
 			blks.each do |blk|
@@ -24,13 +26,13 @@ Puppet::Type.type(:virsh).provide(:vhost) do
 			end
 
 			memnum = vshow('dommemstat', name)
-			memnum.each do |mems|			
+			memnum.each do |mems|
 				if mems =~ /actual\s+(\d+)/
 					@memory = $1.to_i  / 1024
 				end
 			end
 
-			vcpunum = vshow('vcpucount',name)			
+			vcpunum = vshow('vcpucount',name)
 			vcpunum.each do |vcpu|
 				@cpu = $1	if vcpu =~ /current\s+config\s+(\d+)/
 			end
@@ -40,7 +42,6 @@ Puppet::Type.type(:virsh).provide(:vhost) do
 				@vncport = $1.to_i + 5900		if vnc =~ /:(\d+)/
 			end
 
-
 			new( :name		=> name,
 				 :diskpath	=> @diskpath,
 				 :vnettype  => @ntype,
@@ -49,33 +50,25 @@ Puppet::Type.type(:virsh).provide(:vhost) do
 				 :vncport	=> @vncport,
 				 :vcpus		=> @cpu,
 				 :ensure	=> :present
-			#	 :provider	=> self.name
 			)
 		end
 	end
 
 	def create
-
-		disksize	= resource[:disksize] || 40
-		if resource[:diskformat].to_s =~ /qcow2/
-			qemu_img('create','-f',resource[:diskformat],resource[:diskpath],"#{disksize.to_s}G" )
-		end
-		name 		= '--name='  + resource[:name]
-		memory		= '--ram='	 + resource[:memory]
-		diskpath	= 'path=' 	 + resource[:diskpath] + ',size=' + disksize.to_s + ',format=' + resource[:diskformat].to_s + ',bus=virtio'
+		name 		= '--name='  + resource[:name].to_s
+		memory		= '--ram='	 + resource[:memory].to_s
 		vcpus		= '--vcpus=' + resource[:vcpus].to_s
 		vnclisten	= %q(vnc,listen="0.0.0.0")
-	
-		if resource[:vncport]
-			vnc	= vnclisten +	',port=' + resource[:vncport].to_s			
-		end
 
-		if resource[:cdrom]
-			cdrom 	= '--cdrom=' + resource[:cdrom]
-		else
-			cdrom 	= '--boot=hd'
-		end
-		args 		= [name,memory,'--disk',diskpath,vcpus,cdrom,'--graphics',vnc]
+		disksize	= resource[:disksize] || 40
+		create_hd(resource,disksize)	unless FileTest.exists?(resource[:diskpath])
+		diskpath	= build_diskpath(resource,disksize)
+
+		vnc	= vnclisten +	',port=' + resource[:vncport].to_s			if resource[:vncport]
+
+		boot_args 	= boot(resource)
+
+		args 		= [name,memory,'--disk',diskpath,vcpus,boot_args,'--graphics',vnc]
 		vinstall *args
 		@property_hash[:ensure] = :present
 	end
@@ -83,17 +76,28 @@ Puppet::Type.type(:virsh).provide(:vhost) do
 
 
 	def destroy
-
+		delete_hd(resource) 	if 	resource[:force]
 		shutdown(resource)
 		undefine(resource)
-		delete_hd(resource) 	if 	resource[:force]
 		@property_hash[:ensure] = :absent
 
 	end
 
 	def exists?
+		a_args = ['diskpath','memory','vncport','vcpus']
+		a_args.each do |value|
+			break		if resource[value].to_s == '' or  @property_hash[value.to_sym].to_s == ''
+
+			unless @property_hash[value.to_sym].to_s  == resource[value].to_s
+				@property_hash[:ensure] = :absent
+				shutdown(resource)
+				undefine(resource)
+				break
+			end
+		end
 		@property_hash[:ensure]  == :present
 	end
+
 	def self.prefetch(resources)
 		vms = instances
 		resources.keys.each do |name|
@@ -127,7 +131,7 @@ Puppet::Type.type(:virsh).provide(:vhost) do
 		@property_hash[:diskpath] = diskpath
 	end
 
-	
+
 	def shutdown(resource)
 		vshow('destroy',resource[:name])
 	end
@@ -136,7 +140,24 @@ Puppet::Type.type(:virsh).provide(:vhost) do
 		vshow('undefine',resource[:name])
 	end
 
-	def delete_hd(resource) 	
+	def boot(resource)
+		if resource[:cdrom]
+			'--cdrom=' + resource[:cdrom]
+		else
+			'--boot=hd'
+		end
+	end
+
+	def build_diskpath(resource,disksize)
+		diskpath	= 'path=' 	 + resource[:diskpath] + ',size=' + disksize.to_s + ',format=' + resource[:diskformat].to_s + ',bus=virtio'
+		return diskpath
+	end
+
+	def create_hd(resource,disksize)
+		qemu_img('create','-f',resource[:diskformat],resource[:diskpath],"#{disksize.to_s}G" )
+	end
+
+	def delete_hd(resource)
 		blklist = vshow('-q','domblklist', resource[:name])
 		blklist.split(/\n/)[0..-1].map do |blk|
 			if blk =~ /^[hvs]d[a-z]\s+(.*)/
