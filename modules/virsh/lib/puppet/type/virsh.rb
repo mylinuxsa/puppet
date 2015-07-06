@@ -6,24 +6,24 @@ Puppet::Type.newtype(:virsh) do
 
 	newparam(:name, :namevar => true) do
 	end
-	
+
 	newparam(:virttype) do
 	    desc 'The pool type.'
 		validate do |value|
-			if value =~  /network/
-				resource[:provider] = :network
+			if value =~  /vnetwork/
+				resource[:provider] = :vnetwork
 			else
 				resource[:provider] = :vhost
 			end
 		end
 	 end
-	
+
 	newparam(:cdrom) do
-		validate  do |value|	
+		validate  do |value|
 			fail ("cdrom path ")   unless value =~ /^\//
 		end
 	end
-	
+
 	newparam(:force) do
 		defaultto false
 		newvalues(:true, :false)
@@ -43,6 +43,14 @@ Puppet::Type.newtype(:virsh) do
 		newvalues(/\d+/)
 	end
 
+	newproperty(:vname) do
+	end
+
+	newproperty(:vnettype) do
+		defaultto :bridge
+		newvalues(:network, :bridge)
+	end
+
 	newproperty(:memory) do
 		munge do |value|
 			if value =~ /(\d+)([g|G|m|M])?/
@@ -53,14 +61,14 @@ Puppet::Type.newtype(:virsh) do
 				value.to_s
 		end
 	end
-	
+
 	newproperty(:vcpus) do
 		newvalues(/\d+/)
 	end
 
 	newproperty(:diskpath) do
-		validate  do |value|	
-			fail ("cdrom path ")   unless value =~ /^\// 
+		validate  do |value|
+			fail ("cdrom path ")   unless value =~ /^\//
 		end
 	end
 

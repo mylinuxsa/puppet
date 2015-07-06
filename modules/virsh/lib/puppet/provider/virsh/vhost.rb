@@ -45,7 +45,7 @@ Puppet::Type.type(:virsh).provide(:vhost) do
 			new( :name		=> name,
 				 :diskpath	=> @diskpath,
 				 :vnettype  => @ntype,
-				 :vnet		=> @nname,
+				 :vname		=> @nname,
 				 :memory	=> @memory,
 				 :vncport	=> @vncport,
 				 :vcpus		=> @cpu,
@@ -65,10 +65,12 @@ Puppet::Type.type(:virsh).provide(:vhost) do
 		diskpath	= build_diskpath(resource,disksize)
 
 		vnc	= vnclisten +	',port=' + resource[:vncport].to_s			if resource[:vncport]
-
 		boot_args 	= boot(resource)
 
-		args 		= [name,memory,'--disk',diskpath,vcpus,boot_args,'--graphics',vnc]
+		network_args	= create_network(resource)
+
+		p network_args
+		args 		= [name,memory,'--disk',diskpath,vcpus,boot_args,'--graphics',vnc,'--network',network_args]
 		vinstall *args
 		@property_hash[:ensure] = :present
 	end
@@ -84,7 +86,10 @@ Puppet::Type.type(:virsh).provide(:vhost) do
 	end
 
 	def exists?
-		a_args = ['diskpath','memory','vncport','vcpus']
+		@property_hash.each do |k,v|
+			p "#{k}=>#{v}\n"
+		end
+		a_args = ['diskpath','memory','vncport','vcpus','vname','vnettype']
 		a_args.each do |value|
 			break		if resource[value].to_s == '' or  @property_hash[value.to_sym].to_s == ''
 
@@ -131,6 +136,21 @@ Puppet::Type.type(:virsh).provide(:vhost) do
 		@property_hash[:diskpath] = diskpath
 	end
 
+	def vname
+		@property_hash[:vname] || false
+	end
+
+	def vname=(vname)
+		@property_hash[:vname] = vname
+	end
+
+	def vnettype
+		@property_hash[:vnettype] || false
+	end
+
+	def vnettype=(vnettype)
+		@property_hash[:vnettype] = vnettype
+	end
 
 	def shutdown(resource)
 		vshow('destroy',resource[:name])
@@ -146,6 +166,17 @@ Puppet::Type.type(:virsh).provide(:vhost) do
 		else
 			'--boot=hd'
 		end
+	end
+
+
+	def create_network(resource)
+		network_args = ''
+		if resource[:vnettype]	 =~ /network/
+			network_args = 'network=' + resource[:vname] +  ',model=virtio'
+		else
+			network_args = 'bridge=' + resource[:vname] +  ',model=virtio'
+		end
+		return network_args
 	end
 
 	def build_diskpath(resource,disksize)
