@@ -1,35 +1,38 @@
-require 'fileutils'
-
 Puppet::Type.type(:vnet).provide(:vnetwork) do
 	commands :vshow 	=> '/usr/bin/virsh'
 	commands :brctl 	=> '/usr/sbin/brctl'
 
 	def self.instances
-		bridges = brctl('show')
-		@name
-		@vline = {}
-		bridges.split(/\n/)[1..-1].map do |bridge|
-			line = bridge.strip.split(/\s+/)	
-			if line.size > 1
-				@name 		= line[0]	
-				@vline[@name] = [] 
-				@vline[@name].push(line[-1])
-			elsif line.length  == 1
-				@vline[@name].push(line[0])
+		network_card	= vshow('iface-list')
+		@vline = Hash.new
+
+		network_card.split(/\n/)[2..-1].map do |value|
+			line		= value.split(/\s+/)
+			bridges		= brctl('show',line[0])
+			bridges.split(/\n/)[1..-1].map do |bridge|
+					next	if bridge =~ /^(lo)/
+				bridge_line = bridge.strip.split(/\s+/)	
+				if bridge_line.size > 1 and bridge_line.size < 5
+					@key			= bridge_line[0]	
+					@phycard		= bridge_line[3]
+					@vline[@key] 	= Array.new
+					@vline[@key].push(@phycard)
+				elsif bridge_line.length  == 1
+					@vline[@key].push(bridge_line[0])
+				end
 			end
 		end
-		
-		@vline.keys.collect do |key|
-			new( :name		=> key,
-				 :phycard	=> @vline[key],
-				 :provider	=> self.name,
+
+		@vline.keys.collect do |value|
+			new( :name		=> value,
+				 :phycard	=> @vline[value],
 				 :ensure	=> :present
 			)
 		end
 	end
 
 	def create
-		vshow('iface-bridge',resource[:phycard],resource[:name])	
+		vshow('iface-bridge',resource[:phycard],resource[:name])
 		@property_hash[:ensure] = :present
 	end
 
@@ -42,6 +45,13 @@ Puppet::Type.type(:vnet).provide(:vnetwork) do
 	end
 
 	def exists?
+		a_args = ['phycard']
+		a_args.each do  |value|
+			break 	if		@property_hash[value.to_sym].to_s == '' or resource[value].to_s == ''
+			unless	@property_hash[value.to_sym].to_s.include?(resource[value].to_s)
+					return false
+			end
+		end
 		@property_hash[:ensure]  == :present
 	end
 
@@ -52,18 +62,13 @@ Puppet::Type.type(:vnet).provide(:vnetwork) do
 				resources[name].provider = provider
 			end
 		end
-
-		resources.each do |k,v|
-			puts "#{k}=>#{v}\n"
-		end
-
 	end
 
 	def phycard
-		@property_hash[:phy] || false
+		@property_hash[:phycard] || false
 	end
 
 	def phycard=(phycard)
-		@property_hash[:phy] || false
+		@property_hash[:phycard].push(phycard)
 	end
 end
