@@ -8,9 +8,9 @@ Puppet::Type.type(:virsh).provide(:vhost) do
 	def self.instances
 		vms = vshow('-q','list','--all')
 		vms.split(/\n/)[0..-1].map do |vm|
-			line = vm.strip.split(/\s+/)
-			name 	= line[1]
-			status	= line[2]
+			line = vm.strip.split(/\s+/)	
+			name 	= line[1]	
+			status	= line[2] 
 
 			blks = vshow('domblklist', name)
 			blks.each do |blk|
@@ -26,13 +26,13 @@ Puppet::Type.type(:virsh).provide(:vhost) do
 			end
 
 			memnum = vshow('dommemstat', name)
-			memnum.each do |mems|
+			memnum.each do |mems|			
 				if mems =~ /actual\s+(\d+)/
 					@memory = $1.to_i  / 1024
 				end
 			end
 
-			vcpunum = vshow('vcpucount',name)
+			vcpunum = vshow('vcpucount',name)			
 			vcpunum.each do |vcpu|
 				@cpu = $1	if vcpu =~ /current\s+config\s+(\d+)/
 			end
@@ -63,11 +63,11 @@ Puppet::Type.type(:virsh).provide(:vhost) do
 		disksize	= resource[:disksize] || 40
 		create_hd(resource,disksize)	unless FileTest.exists?(resource[:diskpath])
 		diskpath	= build_diskpath(resource,disksize)
-
+		
 		vnc	= vnclisten +	',port=' + resource[:vncport].to_s			if resource[:vncport]
 		boot_args 	= boot(resource)
-
-		network_args	= create_network(resource)
+		
+		network_args	= create_network(resource)		
 
 		p network_args
 		args 		= [name,memory,'--disk',diskpath,vcpus,boot_args,'--graphics',vnc,'--network',network_args]
@@ -89,12 +89,12 @@ Puppet::Type.type(:virsh).provide(:vhost) do
 		@property_hash.each do |k,v|
 			p "#{k}=>#{v}\n"
 		end
-		a_args = ['diskpath','memory','vncport','vcpus','vname','vnettype']
+		a_args = ['diskpath','memory','vncport','vcpus','vname','vnettype']	
 		a_args.each do |value|
-			break		if resource[value].to_s == '' or  @property_hash[value.to_sym].to_s == ''
+			break		if resource[value].to_s == '' or  @property_hash[value.to_sym].to_s == ''		
 
 			unless @property_hash[value.to_sym].to_s  == resource[value].to_s
-				@property_hash[:ensure] = :absent
+				@property_hash[:ensure] = :absent 
 				shutdown(resource)
 				undefine(resource)
 				break
@@ -143,7 +143,7 @@ Puppet::Type.type(:virsh).provide(:vhost) do
 	def vname=(vname)
 		@property_hash[:vname] = vname
 	end
-
+	
 	def vnettype
 		@property_hash[:vnettype] || false
 	end
@@ -161,34 +161,34 @@ Puppet::Type.type(:virsh).provide(:vhost) do
 	end
 
 	def boot(resource)
-		if resource[:cdrom]
-			'--cdrom=' + resource[:cdrom]
+		if resource[:cdrom] 
+			'--cdrom=' + resource[:cdrom] 
 		else
-			'--boot=hd'
+			'--boot=hd' 
 		end
 	end
-
+	
 
 	def create_network(resource)
-		network_args = ''
-		if resource[:vnettype]	 =~ /network/
+		network_args = '' 
+		if resource[:vnettype]	 =~ /network/ 
 			network_args = 'network=' + resource[:vname] +  ',model=virtio'
 		else
 			network_args = 'bridge=' + resource[:vname] +  ',model=virtio'
 		end
 		return network_args
 	end
-
+	
 	def build_diskpath(resource,disksize)
 		diskpath	= 'path=' 	 + resource[:diskpath] + ',size=' + disksize.to_s + ',format=' + resource[:diskformat].to_s + ',bus=virtio'
-		return diskpath
+		return diskpath	
 	end
 
 	def create_hd(resource,disksize)
 		qemu_img('create','-f',resource[:diskformat],resource[:diskpath],"#{disksize.to_s}G" )
-	end
+	end	
 
-	def delete_hd(resource)
+	def delete_hd(resource) 	
 		blklist = vshow('-q','domblklist', resource[:name])
 		blklist.split(/\n/)[0..-1].map do |blk|
 			if blk =~ /^[hvs]d[a-z]\s+(.*)/
