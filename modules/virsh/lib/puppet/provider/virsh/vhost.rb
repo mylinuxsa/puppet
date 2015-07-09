@@ -69,7 +69,6 @@ Puppet::Type.type(:virsh).provide(:vhost) do
 		
 		network_args	= create_network(resource)		
 
-		p network_args
 		args 		= [name,memory,'--disk',diskpath,vcpus,boot_args,'--graphics',vnc,'--network',network_args]
 		vinstall *args
 		@property_hash[:ensure] = :present
@@ -86,9 +85,6 @@ Puppet::Type.type(:virsh).provide(:vhost) do
 	end
 
 	def exists?
-		@property_hash.each do |k,v|
-			p "#{k}=>#{v}\n"
-		end
 		a_args = ['diskpath','memory','vncport','vcpus','vname','vnettype']	
 		a_args.each do |value|
 			break		if resource[value].to_s == '' or  @property_hash[value.to_sym].to_s == ''		
