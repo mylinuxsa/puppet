@@ -1,3 +1,6 @@
+利用puppet 管理kvm，创建销毁
+
+
 # puppet
 # puppet lib
 
